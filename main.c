@@ -44,6 +44,7 @@ void attack(int row_def,int col_def);
 
 int main()
 {
+    printf("Woonsen kub");
     while(1){
         if(check_win() == 1){
             build_board();
