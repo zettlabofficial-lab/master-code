@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 
+//woonsen56
 char board_A[5][5] = {
     {' ','J','K','Q',' '},
     {' ',' ',' ',' ',' '},
