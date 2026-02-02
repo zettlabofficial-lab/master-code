@@ -387,3 +387,4 @@ void build_board()
            turn,
            player == 0 ? itemA : itemB);
 }
+/*หมูเด้งสอนไม่เข้าใจ*/
