@@ -1,0 +1,93 @@
+{
+    "test_cases": [
+        {
+            "name": "Complete Game - Player A Victory",
+            "steps": [
+                {
+                    "row": 0,
+                    "col": 1,
+                    "walk": "w",
+                    "use_item": "n",
+                    "comment": "Player A: ขยับ J (0,1) ลงมาที่ (1,1)"
+                },
+                {
+                    "row": 4,
+                    "col": 1,
+                    "walk": "w",
+                    "use_item": "n",
+                    "comment": "Player B: ขยับ j (4,1) ขึ้นมาที่ (3,1)"
+                },
+                {
+                    "row": 1,
+                    "col": 1,
+                    "walk": "w",
+                    "use_item": "n",
+                    "comment": "Player A: ขยับ J (1,1) ลงมาที่ (2,1)"
+                },
+                {
+                    "row": 3,
+                    "col": 1,
+                    "walk": "w",
+                    "use_item": "n",
+                    "comment": "Player B: ขยับ j (3,1) มาชน J (2,1) -> ตัวเดียวกัน ตายคู่!"
+                },
+                {
+                    "row": 0,
+                    "col": 3,
+                    "walk": "w",
+                    "use_item": "n",
+                    "comment": "Player A: ขยับ Q (0,3) ลงมาที่ (1,3)"
+                },
+                {
+                    "row": 4,
+                    "col": 3,
+                    "walk": "w",
+                    "use_item": "n",
+                    "comment": "Player B: ขยับ q (4,3) ขึ้นมาที่ (3,3)"
+                },
+                {
+                    "row": 1,
+                    "col": 3,
+                    "walk": "w",
+                    "use_item": "n",
+                    "comment": "Player A: ขยับ Q (1,3) ลงมาที่ (2,3)"
+                },
+                {
+                    "row": 3,
+                    "col": 3,
+                    "walk": "w",
+                    "use_item": "n",
+                    "comment": "Player B: ขยับ q (3,3) มาชน Q (2,3) -> ตัวเดียวกัน ตายคู่!"
+                },
+                {
+                    "row": 0,
+                    "col": 2,
+                    "walk": "w",
+                    "use_item": "n",
+                    "comment": "Player A: ขยับ K (0,2) ลงมาที่ (1,2)"
+                },
+                {
+                    "row": 4,
+                    "col": 2,
+                    "walk": "w",
+                    "use_item": "n",
+                    "comment": "Player B: ขยับ k (4,2) ขึ้นมาที่ (3,2)"
+                },
+                {
+                    "row": 1,
+                    "col": 2,
+                    "walk": "w",
+                    "use_item": "n",
+                    "comment": "Player A: ขยับ K (1,2) ลงมาที่ (2,2)"
+                },
+                {
+                    "row": 3,
+                    "col": 2,
+                    "walk": "w",
+                    "use_item": "n",
+                    "comment": "Player B: ขยับ k (3,2) มาชน K (2,2) -> ตายคู่! Player B ตัวหมดแล้ว"
+                }
+            ]
+        }
+    ]
+}
