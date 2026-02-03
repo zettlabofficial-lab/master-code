@@ -184,6 +184,14 @@ void change_chess()
     if (nr < 0 || nr > 4 || nc < 0 || nc > 4)
         return;
 
+    // ❌ ห้ามเดินทับตัวเอง
+    if (player == 0 && board_A[nr][nc] != ' ')
+        return;
+
+    if (player == 1 && board_B[nr][nc] != ' ')
+        return;
+
+    // ⚔️ เจอศัตรู → โจมตี
     if (player == 0 && board_B[nr][nc] != ' ')
     {
         attack(nr, nc);
@@ -194,6 +202,7 @@ void change_chess()
         attack(nr, nc);
         return;
     }
+
     // ลบตัวออกจากตำแหน่งเดิม
     board[row][col] = ' ';
     board_A[row][col] = ' ';
