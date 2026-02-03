@@ -3,7 +3,8 @@
 #include <stdlib.h>
 #include <ctype.h>
 #define SIZE 5
-int trap[SIZE][SIZE] = {0};
+int trapA[SIZE][SIZE] = {0};
+int trapB[SIZE][SIZE] = {0};
 int setupPhase = 1; 
 
 //woonsen56
@@ -49,97 +50,91 @@ void attack(int row_def,int col_def);
 
 int main()
 {
-    // ===== Place traps before the game starts =====
+    setupPhase = 1;   // ===== ช่วงวางกับดัก =====
+
     printf("=== PLACE TRAPS BEFORE GAME ===\n");
 
-    player = 0;   // <<< เพิ่ม : กำหนดให้ Player A วางกับดัก
+    // ---------- Player A ----------
+    player = 0;
     printf("Player A place a trap\n");
-    placeTrap();
-    build_board();
+    build_board();        // แสดงตารางก่อนวาง
+    placeTrap();          // วางกับดัก
+    build_board();        // แสดงตารางหลังวาง
 
-    player = 1;   // <<< เพิ่ม : กำหนดให้ Player B วางกับดัก
+    // ---------- Player B ----------
+    player = 1;
     printf("Player B place a trap\n");
-    placeTrap();
-    build_board();
+    build_board();        // แสดงตารางก่อนวาง (ไม่เห็นของ A)
+    placeTrap();          // วางกับดัก
+    build_board();        // แสดงตารางหลังวาง
 
-    printf("=== GAME START ===\n");
-    setupPhase = 0;   // <<< ตรงนี้
+    // ===== เริ่มเกม =====
+    printf("\n=== GAME START ===\n");
+    setupPhase = 0;
+
     player = 0;
     turn = 1;
     itemA = 0;
     itemB = 0;
 
-    while(1){
-        if(check_win() == 1){
+    while (1) {
+
+        if (check_win() == 1) {
             build_board();
             printf("\n[Player B] Winner!!\n");
             break;
         }
-        else if(check_win() == 0){
+        else if (check_win() == 0) {
             build_board();
             printf("\n[Player A] Winner!!\n");
             break;
         }
-        else if(check_win() == 2){
+        else if (check_win() == 2 || turn == 21) {
             build_board();
             printf("\nPlayers draw!!\n");
             break;
         }
-        else if(turn == 21){
+        else {
             build_board();
-            printf("\nPlayers draw!!\n");
-            break;
-        }
-        else{
-            if(turn % 3 == 0){
-                srand(time(NULL));
-                skill_r = rand() % 5;
-                skill_c = rand() % 5;
+            player_turn();
 
-                if(board_A[skill_r][skill_c] == 'J' ||
-                   board_A[skill_r][skill_c] == 'K' ||
-                   board_A[skill_r][skill_c] == 'Q'){
-                    board_A[skill_r][skill_c] = ' ';
-                }
-                else if(board_B[skill_r][skill_c] == 'j' ||
-                        board_B[skill_r][skill_c] == 'k' ||
-                        board_B[skill_r][skill_c] == 'q'){
-                    board_B[skill_r][skill_c] = ' ';
-                }
-
-                build_board();
-                player_turn();
-            }
-            else{
-                build_board();
-                player_turn();
-            }
-
-            // switch player
             player = (player == 0) ? 1 : 0;
             turn++;
         }
     }
+
+    return 0;
 }
 
 void placeTrap(void)
 {
-    while(1){
-        printf("Enter trap position (row col): ");
-        scanf("%d %d", &skill_r, &skill_c);
+    int row, col;
 
-        if(skill_r >= 0 && skill_r < SIZE &&
-           skill_c >= 0 && skill_c < SIZE &&
-           board[skill_r][skill_c] == ' ' &&
-           trap[skill_r][skill_c] == 0)
-        {
-            trap[skill_r][skill_c] = 1;
-            printf("Trap placed successfully\n");
-            break;   // << ออกจาก loop เมื่อวางสำเร็จ
+    while (1) {
+        printf("Enter trap position (row col): ");
+        scanf("%d %d", &row, &col);
+
+        if (row < 0 || row >= SIZE || col < 0 || col >= SIZE) {
+            printf("Out of board. Try again.\n");
+            continue;
         }
-        else{
-            printf("Invalid position or already has a trap. Try again.\n");
+
+        // Player A
+        if (player == 0) {
+            if (trapA[row][col] == 0) {
+                trapA[row][col] = 1;
+                break;
+            }
         }
+        // Player B
+        else {
+            if (trapB[row][col] == 0) {
+                trapB[row][col] = 1;
+                break;
+            }
+        }
+
+        printf("Already has a trap. Try again.\n");
     }
 }
 
@@ -226,34 +221,42 @@ void player_turn(){
     else if(walk == 'd') col++;
 
 // ===== CHECK TRAP =====
-    if(trap[row][col] == 1){
-        printf("\n!!! Player %c stepped on a trap !!!\n",
-           (player == 0) ? playerA : playerB);
 
-    if(player == 0){
-        itemA = 1;
-    }else{
-        itemB = 1;
-    }
 
-    trap[row][col] = 0;   // remove trap
+// Player A เดิน → เช็กกับดักของ B
+    if (player == 0 && trapB[row][col] == 1) {
+
+        printf("\n!!! Player A stepped on Player B's trap !!!\n");
+    itemA = 1;                 // ได้ item
+    trapB[row][col] = 0;       // ลบกับดัก
+}
+
+// Player B เดิน → เช็กกับดักของ A
+    else if (player == 1 && trapA[row][col] == 1) {
+
+        printf("\n!!! Player B stepped on Player A's trap !!!\n");
+    itemB = 1;                 // ได้ item
+    trapA[row][col] = 0;       // ลบกับดัก
 }
 
 }
 
 void checkTrapAfterMove(int r, int c)
 {
-    if(trap[r][c] == 1){
-        printf(">>> Player %c stepped on a trap! Skip next turn!\n",
-               (player == 0) ? playerA : playerB);
+    // Player A เดิน → เจอกับดักของ Player B
+    if (player == 0 && trapB[r][c] == 1) {
 
-        if(player == 0){
-            itemA = 1;
-        }else{
-            itemB = 1;
-        }
+        printf(">>> Player A stepped on Player B's trap!\n");
+        itemA = 1;          // ได้ item
+        trapB[r][c] = 0;    // ลบกับดัก
+    }
 
-        trap[r][c] = 0;
+    // Player B เดิน → เจอกับดักของ Player A
+    else if (player == 1 && trapA[r][c] == 1) {
+
+        printf(">>> Player B stepped on Player A's trap!\n");
+        itemB = 1;          // ได้ item
+        trapA[r][c] = 0;    // ลบกับดัก
     }
 }
 
@@ -401,35 +404,51 @@ void change_chess(){
 }
 
 // create board
-void build_board(){
+void build_board()
+{
     printf("=======[ CHESS ]=======\n");
     printf("\tPLAYER A\n");
     printf("-----------------------\n");
     printf("  | 0 | 1 | 2 | 3 | 4 |\n");
     printf("-----------------------\n");
 
-    for(int i = 0; i < SIZE; i++){
-        printf("%d", i);
-        for(int j = 0; j < SIZE; j++){
-            if(setupPhase == 1 && trap[i][j] == 1 && board[i][j] == ' '){
-                printf(" | T");   // แสดงเฉพาะตอนวางกับดัก
-            }else{
+    for (int i = 0; i < SIZE; i++) {
+    printf("%d", i);
+    for (int j = 0; j < SIZE; j++) {
+
+        // ช่วงวางกับดัก
+        if (setupPhase == 1) {
+
+            // Player A วาง → เห็นของ A
+            if (player == 0 && trapA[i][j] == 1) {
+                printf(" | T");
+            }
+            // Player B วาง → เห็นของ B
+            else if (player == 1 && trapB[i][j] == 1) {
+                printf(" | T");
+            }
+            else {
                 printf(" | %c", board[i][j]);
+            }
         }
+        // ช่วงเล่นจริง
+        else {
+            printf(" | %c", board[i][j]);
         }
-        printf(" |\n");
-        printf("-----------------------\n");
+    }
+    printf(" |\n");
+    printf("-----------------------\n");
     }
 
-    printf("\tPLAYER B\n");
-    printf("=======================\n\n");
+    // แสดง TURN + SKILL เฉพาะตอนเริ่มเกม
+    if (setupPhase == 0) {
+        printf("PLAYER %c\tTURN : %d\n",
+               (player == 0) ? playerA : playerB, turn);
 
-    printf("PLAYER %c\tTURN : %d\n",
-           (player == 0) ? playerA : playerB, turn);
-
-    if(player == 0){
-        printf("SKILL : long walk : %d\n", itemA);
-    }else{
-        printf("SKILL : long walk : %d\n", itemB);
+        if (player == 0) {
+            printf("SKILL : long walk : %d\n", itemA);
+        } else {
+            printf("SKILL : long walk : %d\n", itemB);
+        }
     }
 }
