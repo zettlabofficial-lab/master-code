@@ -43,7 +43,7 @@ char walk;
 int bomb_map[5][5] = {0};        // 1 = มีระเบิด (ซ่อน)
 int bomb_show_turn[5][5] = {0};  // แสดงระเบิดเฉพาะเทิร์นที่โดน
 int bomb_happened = 0;
-int skip_bomb_check = 0;         // ⭐ แก้บั๊กไอเท็ม
+int skip_bomb_check = 0;         //  แก้บั๊กไอเท็ม
 
 /* =======================
    PROTOTYPE
@@ -105,22 +105,22 @@ void player_turn(){
         check = scanf("%d %d",&row,&col);
 
         if(check!=2){
-            printf("⚠️  Please enter NUMBER only!\n");
+            printf("Please enter NUMBER only!\n");
             while(getchar()!='\n');
             continue;
         }
 
         if(row<0||row>4||col<0||col>4){
-            printf("⚠️  Position out of board (0-4)\n");
+            printf("Position out of board (0-4)\n");
             continue;
         }
 
         if(player==0 && board_A[row][col]==' '){
-            printf("⚠️  Not your piece (PLAYER A)\n");
+            printf("Not your piece (PLAYER A)\n");
             continue;
         }
         if(player==1 && board_B[row][col]==' '){
-            printf("⚠️  Not your piece (PLAYER B)\n");
+            printf("Not your piece (PLAYER B)\n");
             continue;
         }
         break;
@@ -253,7 +253,7 @@ void random_bomb(){
 }
 
 void check_bomb(char piece,int r,int c){
-    printf("💥 BOOM!! %c hit bomb\n",piece);
+    printf("BOOM!! %c hit bomb\n",piece);
     bomb_happened=1;
     bomb_show_turn[r][c]=turn;
     bomb_map[r][c]=0;
