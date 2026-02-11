@@ -305,43 +305,30 @@ void attack(int r, int c)
 
     int result = fight(atk, def);
 
-    // ⚖️ เสมอ → หายทั้งคู่
+    //  เสมอ → หายทั้งคู่
     if (result == 0)
     {
         board[row][col] = board[r][c] = ' ';
         board_A[row][col] = board_B[row][col] = ' ';
         board_A[r][c] = board_B[r][c] = ' ';
-
-        // ⭐ ตรวจว่าหมากหมดทั้งสองฝ่ายไหม
-        int a = 0, b = 0;
-
-        for (int i = 0; i < 5; i++)
-            for (int j = 0; j < 5; j++)
-            {
-                if (board_A[i][j] == 'J' || board_A[i][j] == 'K' || board_A[i][j] == 'Q')
-                    a++;
-                if (board_B[i][j] == 'j' || board_B[i][j] == 'k' || board_B[i][j] == 'q')
-                    b++;
-            }
-
-        if (a == 0 && b == 0)
-            game_result = 2;   // ⭐ DRAW
-
         return;
     }
 
-    // 🏆 atk ชนะ
+    //  atk ชนะ
     if (result == 1)
     {
+        // ลบ atk เดิม
         board[row][col] = ' ';
         if (player == 0)
             board_A[row][col] = ' ';
         else
             board_B[row][col] = ' ';
 
+        // ล้างเป้าหมาย
         board_A[r][c] = ' ';
         board_B[r][c] = ' ';
 
+        // วาง atk
         board[r][c] = atk;
         if (player == 0)
             board_A[r][c] = atk;
@@ -353,14 +340,12 @@ void attack(int r, int c)
 
         if (bomb_map[r][c])
             check_bomb(atk, r, c);
-
         return;
     }
 
-    // ❌ atk แพ้ → ไม่ลบ ไม่ย้าย
-    return;
+    //  atk แพ้ → ไม่ลบ ไม่ย้าย ไม่แตะอะไรเลย
+    // แค่จบตา
 }
-
 
 /* =======================
    BOMB
