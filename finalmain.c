@@ -305,14 +305,14 @@ void attack(int r, int c)
 
     int result = fight(atk, def);
 
-    // ⚖️ เสมอ → หายทั้งคู่
+    //  เสมอ → หายทั้งคู่
     if (result == 0)
     {
         board[row][col] = board[r][c] = ' ';
         board_A[row][col] = board_B[row][col] = ' ';
         board_A[r][c] = board_B[r][c] = ' ';
 
-        // ⭐ ตรวจว่าหมากหมดทั้งสองฝ่ายไหม
+        //  ตรวจว่าหมากหมดทั้งสองฝ่ายไหม
         int a = 0, b = 0;
 
         for (int i = 0; i < 5; i++)
@@ -325,12 +325,12 @@ void attack(int r, int c)
             }
 
         if (a == 0 && b == 0)
-            game_result = 2;   // ⭐ DRAW
+            game_result = 2;   //  DRAW
 
         return;
     }
 
-    // 🏆 atk ชนะ
+    //  atk ชนะ
     if (result == 1)
     {
         board[row][col] = ' ';
@@ -357,7 +357,7 @@ void attack(int r, int c)
         return;
     }
 
-    // ❌ atk แพ้ → ไม่ลบ ไม่ย้าย
+    //  atk แพ้ → ไม่ลบ ไม่ย้าย
     return;
 }
 
