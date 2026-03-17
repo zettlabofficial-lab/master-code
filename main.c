@@ -1,636 +1,779 @@
-/*
- * ============================================================
- *   JKQ Board Game — Mak Ruk Yuttha Hatthi
- * ============================================================
- *
- *  [กติกาหลัก]
- *   - กระดาน 5x5  ผู้เล่น 2 คน
- *   - หมาก 3 ชนิด : J (จั๊ก), K (คิง), Q (ควีน)
- *   - กินกัน : K กิน Q / Q กิน J / J กิน K  (วนแบบ Rock-Paper-Scissors)
- *   - ชนิดเดียวกันชนกัน → ตายทั้งคู่
- *
- *  [Feature พิเศษ]
- *   1. กับดัก (Trap)   — ซ่อนบนกระดาน 2 อัน เหยียบแล้วถูกผลัก
- *   2. โล่ป้องกัน (Shield) — ใช้ได้คนละ 1 ครั้ง ป้องกันการโจมตีได้ 1 ครั้ง
- * ============================================================
- */
+#include <stdio.h>  // ใช้สำหรับรับ/แสดงผลข้อมูล เช่น printf, scanf
+#include <stdlib.h> // ใช้สำหรับฟังก์ชัน rand() สุ่มเลข
+#include <time.h>   // ใช้สำหรับ time() เพื่อตั้งค่าเมล็ดสุ่มให้ไม่ซ้ำกันทุกครั้ง
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
+// ขนาดกระดาน 5x5 (เก็บไว้ในตัวแปรเผื่อแก้ไขทีหลัง)
+int BOARD_SIZE = 5;
 
-#define BOARD_SIZE 5 // ขนาดกระดาน (5 x 5)
+// ===== กระดาน =====
+char board[5][5]; // เก็บตัวหมากในแต่ละช่อง เช่น 'J', 'K', 'Q' หรือ '.' ถ้าช่องว่าง
+int owner[5][5];  // เก็บว่าช่องนั้นเป็นของใคร (0 = ว่าง, 1 = ผู้เล่น 1, 2 = ผู้เล่น 2)
 
-/* ------------------------------------------------------------
- *  SECTION 1 : ตัวแปร (Variables)
- *  — เก็บข้อมูลทุกอย่างของเกมไว้ที่นี่
- * ------------------------------------------------------------ */
+// ===== กับดัก =====
+int trapRow[2];    // แถวที่กับดักซ่อนอยู่ (มี 2 อัน index 0 กับ 1)
+int trapCol[2];    // คอลัมน์ที่กับดักซ่อนอยู่
+int trapActive[2]; // บอกว่ากับดักยังอยู่ไหม (1 = ยังซ่อนอยู่, 0 = ถูกเหยียบไปแล้ว)
 
-char game_board[BOARD_SIZE][BOARD_SIZE]; // กระดาน — แต่ละช่องเก็บตัวหมาก ('J','K','Q') หรือ '.' ถ้าว่าง
-int  piece_owner[BOARD_SIZE][BOARD_SIZE]; // เจ้าของแต่ละช่อง (0=ว่าง  1=Player1  2=Player2)
+// ===== โล่ป้องกัน =====
+int shieldRow[3];  // แถวของหมากที่ได้รับโล่ (index 1 = ผู้เล่น 1, index 2 = ผู้เล่น 2)
+int shieldCol[3];  // คอลัมน์ของหมากที่ได้รับโล่
+int shieldUsed[3]; // บอกว่าเคยใช้โล่ไปแล้วยัง (0 = ยังไม่ได้ใช้, 1 = ใช้ไปแล้ว)
 
-// กับดัก — มี 2 อัน เก็บแถว/คอลัมน์ และสถานะว่ายังอยู่บนกระดานไหม
-int trap_row[2]    = {-1, -1}; // แถวของกับดักแต่ละอัน
-int trap_col[2]    = {-1, -1}; // คอลัมน์ของกับดักแต่ละอัน
-int trap_active[2] = {0, 0};   // 1=ยังซ่อนอยู่  0=หายไปแล้ว
+// ===== ตัวแปรเกม =====
+int currentPlayer = 1; // ตอนนี้เป็นเทิร์นของใคร เริ่มต้นที่ผู้เล่น 1
 
-// โล่ป้องกัน — เก็บว่าหมากตัวไหนมีโล่อยู่ (index 1=p1, 2=p2)
-int shield_row[3];   // แถวของหมากที่ได้รับโล่
-int shield_col[3];   // คอลัมน์ของหมากที่ได้รับโล่
-int shield_used[3];  // 1=เคยใช้โล่ไปแล้ว  0=ยังไม่เคยใช้
+char pieceInput[8]; // เก็บข้อความที่ผู้เล่นพิมพ์เลือกหมาก เช่น "J", "K", "Q"
+char dirInput[8];   // เก็บข้อความที่ผู้เล่นพิมพ์ทิศทาง เช่น "W", "A", "S", "D"
 
-// ตัวแปรทั่วไป
-int  current_player   = 1;  // ตอนนี้ถึงเทิร์นใคร
-char piece_input[8];         // รับชื่อหมากจากผู้เล่น เช่น "J" "K" "Q"
-char direction_input[8];     // รับทิศทางจากผู้เล่น เช่น "W" "A" "S" "D"
+// ----------------------------
 
-/* ------------------------------------------------------------
- *  SECTION 2 : ประกาศฟังก์ชัน (Function Declarations)
- *  — บอก compiler ล่วงหน้าว่ามีฟังก์ชันอะไรบ้างในโปรแกรม
- * ------------------------------------------------------------ */
-
-void setup_board();                                                          // เตรียมกระดานก่อนเริ่มเกม
-void print_board();                                                          // แสดงกระดานบนหน้าจอ
-int  count_remaining_pieces(int target_player);                             // นับหมากที่เหลืออยู่ของผู้เล่น
-int  can_capture(char attacking_type, char defending_type);                 // เช็คว่าหมาก a กินหมาก b ได้ไหม
-int  is_in_bounds(int row, int col);                                        // เช็คว่าตำแหน่งอยู่ในกระดานไหม
-int  piece_has_shield(int row, int col, int player);                        // เช็คว่าหมากที่ (row,col) มีโล่ไหม
-void remove_shield(int row, int col);                                       // เอาโล่ออกจากตำแหน่ง
-void move_shield_with_piece(int from_row, int from_col, int to_row, int to_col); // ย้ายโล่ตามหมากเวลาเดิน
-int  search_piece(char piece_name, int player, int *result_row, int *result_col); // ค้นหาหมากบนกระดาน
-void trigger_trap(int row, int col, int player, int trap_index);           // จัดการกับดักที่ถูกเหยียบ
-int  play_turn(int player);                                                 // จัดการ 1 เทิร์นของผู้เล่น
-int  get_game_result();                                                     // เช็คว่าเกมจบหรือยัง
-void clear_input_buffer();                                                  // ล้าง input buffer
-
-/* ------------------------------------------------------------
- *  SECTION 3 : เตรียมกระดาน (setup_board)
- *  — ทำครั้งเดียวตอนเริ่มเกม
- *    วางหมากทั้งสองฝ่าย, รีเซ็ตโล่, สุ่มวางกับดัก
- * ------------------------------------------------------------ */
-
-void setup_board() {
-  srand((unsigned int)time(NULL)); // ตั้งค่าเมล็ดสำหรับการสุ่ม
-
-  // ล้างทุกช่องบนกระดานให้ว่าง
-  int row, col;
-  for (row = 0; row < BOARD_SIZE; row++) {
-    for (col = 0; col < BOARD_SIZE; col++) {
-      game_board[row][col]  = '.'; // '.' หมายถึงช่องว่าง
-      piece_owner[row][col] = 0;
-    }
-  }
-
-  // วางหมาก Player 1 ที่แถวบนสุด (row 0)
-  game_board[0][1]  = 'J';
-  piece_owner[0][1] = 1;
-  game_board[0][2]  = 'K';
-  piece_owner[0][2] = 1;
-  game_board[0][3]  = 'Q';
-  piece_owner[0][3] = 1;
-
-  // วางหมาก Player 2 ที่แถวล่างสุด (row 4)
-  game_board[4][1]  = 'J';
-  piece_owner[4][1] = 2;
-  game_board[4][2]  = 'K';
-  piece_owner[4][2] = 2;
-  game_board[4][3]  = 'Q';
-  piece_owner[4][3] = 2;
-
-  // รีเซ็ตโล่ — ยังไม่มีใครได้โล่ตอนเริ่มเกม
-  shield_row[1] = shield_col[1] = -1;
-  shield_row[2] = shield_col[2] = -1;
-  shield_used[1] = shield_used[2] = 0;
-
-  // สุ่มวางกับดัก 2 อัน
-  // อันที่ 0 อยู่ในแถว 1-2 (ใกล้ฝั่ง Player 1)
-  // อันที่ 1 อยู่ในแถว 2-3 (ใกล้ฝั่ง Player 2)
-  int row_ranges[2][2] = {{1, 2}, {2, 3}};
-  int trap_index;
-  for (trap_index = 0; trap_index < 2; trap_index++) {
-    trap_active[trap_index] = 1;
-    do {
-      trap_row[trap_index] = row_ranges[trap_index][0]
-                           + rand() % (row_ranges[trap_index][1] - row_ranges[trap_index][0] + 1);
-      trap_col[trap_index] = rand() % BOARD_SIZE;
-    } while (game_board[trap_row[trap_index]][trap_col[trap_index]] != '.' || // ต้องเป็นช่องว่าง
-             (trap_index == 1 && trap_row[1] == trap_row[0]
-              && trap_col[1] == trap_col[0])); // ห้ามซ้อนกัน
-  }
-
-  printf("[Feature 1] 2 traps have been secretly placed!\n");
+// ฟังก์ชันล้าง input buffer
+// ปัญหา: หลังจาก scanf รับค่าแล้ว จะมีตัวอักษรเก่าค้างใน buffer
+// ถ้าไม่ล้างออก การ scanf ครั้งถัดไปอาจดึงค่าเก่านั้นมาใช้แทน
+void clearInputBuffer()
+{
+    int ch;
+    while ((ch = getchar()) != '\n' && ch != EOF)
+        ; // วนดึงทิ้งไปเรื่อยๆ จนกว่าจะเจอ Enter หรือสิ้นสุดไฟล์
 }
 
-/* ------------------------------------------------------------
- *  SECTION 4 : แสดงกระดาน (print_board)
- *  — วาดกระดานบนหน้าจอ พร้อมโชว์จำนวนหมากและสถานะโล่
- *  — หมากที่มีโล่จะแสดงเป็น [J1] แทน J1
- * ------------------------------------------------------------ */
+// ตรวจสอบว่าตำแหน่ง (row, col) อยู่ในกระดานหรือเปล่า
+// คืนค่า 1 ถ้าอยู่ในกระดาน, คืนค่า 0 ถ้าออกนอกกระดาน
+int inBoard(int row, int col)
+{
+    return (row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE);
+}
 
-void print_board() {
-  printf("\n  *** PLAYER 1 *** (pieces: %d)\n", count_remaining_pieces(1));
+// นับจำนวนหมากที่เหลืออยู่บนกระดานของผู้เล่นคนนั้น
+int countPieces(int player)
+{
+    int count = 0;
+    for (int row = 0; row < BOARD_SIZE; row++)
+    {
+        for (int col = 0; col < BOARD_SIZE; col++)
+        {
+            // ถ้าเจ้าของช่องนี้คือผู้เล่นที่ต้องการ ให้นับเพิ่ม 1
+            if (owner[row][col] == player)
+                count++;
+        }
+    }
+    return count;
+}
 
-  // พิมพ์หมายเลขคอลัมน์ด้านบน
-  printf("        ");
-  int col;
-  for (col = 0; col < BOARD_SIZE; col++)
-    printf("  %d   ", col);
-  printf("\n");
+// กฎการกิน: K กิน Q, Q กิน J, J กิน K (เหมือน Rock-Paper-Scissors)
+// คืนค่า 1 ถ้ากินได้, คืนค่า 0 ถ้ากินไม่ได้
+int canCapture(char attacker, char defender)
+{
+    if (attacker == 'K' && defender == 'Q')
+        return 1; // K กิน Q ได้
+    if (attacker == 'Q' && defender == 'J')
+        return 1; // Q กิน J ได้
+    if (attacker == 'J' && defender == 'K')
+        return 1; // J กิน K ได้
+    return 0;     // กรณีอื่นๆ กินไม่ได้
+}
 
-  // พิมพ์แต่ละแถวของกระดาน
-  int row;
-  for (row = 0; row < BOARD_SIZE; row++) {
-    // เส้นแบ่งแนวนอน
+// ค้นหาหมากชื่อ piece ของผู้เล่น player ว่าอยู่ที่ช่องไหนบนกระดาน
+// ถ้าเจอ จะใส่ตำแหน่งกลับไปใน *row, *col แล้วคืนค่า 1
+// ถ้าหาไม่เจอ คืนค่า 0
+int findPiece(char piece, int player, int *row, int *col)
+{
+    for (int i = 0; i < BOARD_SIZE; i++)
+    {
+        for (int j = 0; j < BOARD_SIZE; j++)
+        {
+            // เจอหมากที่ตรงกันทั้งชื่อและเจ้าของ
+            if (board[i][j] == piece && owner[i][j] == player)
+            {
+                *row = i; // บันทึกตำแหน่งแถวที่เจอ
+                *col = j; // บันทึกตำแหน่งคอลัมน์ที่เจอ
+                return 1;
+            }
+        }
+    }
+    return 0; // วนครบแล้วหาไม่เจอ
+}
+
+// ตรวจสอบว่าหมากที่ตำแหน่ง (row, col) ของผู้เล่น player มีโล่ปกป้องอยู่ไหม
+// คืนค่า 1 ถ้ามีโล่, คืนค่า 0 ถ้าไม่มี
+int hasShield(int row, int col, int player)
+{
+    return (shieldRow[player] == row && shieldCol[player] == col);
+}
+
+// เอาโล่ออกจากหมากที่ตำแหน่ง (row, col)
+// เรียกใช้ตอนโล่ถูกใช้ไปแล้ว หรือหมากที่ถือโล่ถูกกิน
+void removeShield(int row, int col)
+{
+    for (int i = 1; i <= 2; i++)
+    {
+        // เช็คทั้งสองผู้เล่น ว่าใครเป็นเจ้าของโล่ที่ตำแหน่งนี้
+        if (shieldRow[i] == row && shieldCol[i] == col)
+        {
+            shieldRow[i] = -1; // รีเซ็ตตำแหน่งโล่ให้เป็น -1 = ไม่มีโล่แล้ว
+            shieldCol[i] = -1;
+        }
+    }
+}
+
+// อัปเดตตำแหน่งโล่เมื่อหมากเดินจากช่องเก่าไปช่องใหม่
+// โล่จะต้องตามหมากไปทุกครั้งที่หมากขยับ
+void moveShield(int fromRow, int fromCol, int toRow, int toCol)
+{
+    for (int i = 1; i <= 2; i++)
+    {
+        // ถ้าโล่ของผู้เล่น i อยู่ที่ช่องเก่า ให้ย้ายไปช่องใหม่ด้วย
+        if (shieldRow[i] == fromRow && shieldCol[i] == fromCol)
+        {
+            shieldRow[i] = toRow;
+            shieldCol[i] = toCol;
+        }
+    }
+}
+
+// ----------------------------
+
+// เตรียมกระดานก่อนเริ่มเกม
+// ทำครั้งเดียวตอนเริ่ม: วางหมาก, รีเซ็ตโล่, สุ่มวางกับดัก
+void setupBoard()
+{
+    // ตั้งค่าเมล็ดสุ่มด้วยเวลาปัจจุบัน ทำให้กับดักวางต่างกันทุกครั้งที่รันโปรแกรม
+    srand((unsigned int)time(NULL));
+
+    // ล้างทุกช่องบนกระดานให้ว่างก่อน
+    for (int row = 0; row < BOARD_SIZE; row++)
+    {
+        for (int col = 0; col < BOARD_SIZE; col++)
+        {
+            board[row][col] = '.'; // '.' หมายถึงช่องว่าง ไม่มีหมาก
+            owner[row][col] = 0;   // 0 หมายถึงไม่มีเจ้าของ
+        }
+    }
+
+    // วางหมากของผู้เล่น 1 ที่แถวบนสุด (row 0)
+    board[0][1] = 'J';
+    owner[0][1] = 1;
+    board[0][2] = 'K';
+    owner[0][2] = 1;
+    board[0][3] = 'Q';
+    owner[0][3] = 1;
+
+    // วางหมากของผู้เล่น 2 ที่แถวล่างสุด (row 4)
+    board[4][1] = 'J';
+    owner[4][1] = 2;
+    board[4][2] = 'K';
+    owner[4][2] = 2;
+    board[4][3] = 'Q';
+    owner[4][3] = 2;
+
+    // รีเซ็ตโล่ของทั้งสองผู้เล่น — ตอนเริ่มยังไม่มีใครมีโล่
+    for (int i = 1; i <= 2; i++)
+    {
+        shieldRow[i] = shieldCol[i] = -1; // -1 หมายถึงไม่มีโล่
+        shieldUsed[i] = 0;                // 0 หมายถึงยังไม่ได้ใช้
+    }
+
+    // สุ่มวางกับดัก 2 อัน
+    // กำหนดช่วงแถวที่แต่ละกับดักจะถูกสุ่มวาง
+    // กับดักอันที่ 0 → สุ่มในแถว 1-2 (ใกล้ฝั่งผู้เล่น 1)
+    // กับดักอันที่ 1 → สุ่มในแถว 2-3 (ใกล้ฝั่งผู้เล่น 2)
+    int range[2][2] = {{1, 2}, {2, 3}};
+
+    for (int i = 0; i < 2; i++)
+    {
+        trapActive[i] = 1; // กับดักนี้ยังซ่อนอยู่บนกระดาน
+
+        // วนสุ่มตำแหน่งซ้ำจนกว่าจะได้ตำแหน่งที่ถูกต้อง
+        do
+        {
+            // สุ่มแถวในช่วงที่กำหนดของกับดักอันนี้
+            trapRow[i] = range[i][0] + rand() % (range[i][1] - range[i][0] + 1);
+            // สุ่มคอลัมน์ใดก็ได้บนกระดาน
+            trapCol[i] = rand() % BOARD_SIZE;
+        }
+        // เงื่อนไขที่ทำให้สุ่มใหม่:
+        // 1. ต้องเป็นช่องว่าง ห้ามทับหมาก
+        // 2. กับดักอันที่ 2 ห้ามซ้อนตำแหน่งกับกับดักอันแรก
+        while (board[trapRow[i]][trapCol[i]] != '.' ||
+               (i == 1 && trapRow[1] == trapRow[0] && trapCol[1] == trapCol[0]));
+    }
+
+    printf("[Feature 1] 2 traps have been secretly placed!\n");
+}
+
+// ----------------------------
+
+// แสดงกระดานบนหน้าจอ พร้อมบอกจำนวนหมากและสถานะโล่
+// หมากที่มีโล่จะแสดงเป็น [K1] (มีวงเล็บ) แทนที่จะเป็น K1 แบบปกติ
+void printBoard()
+{
+    // แสดงจำนวนหมากของผู้เล่น 1 ด้านบน
+    printf("\n  *** PLAYER 1 *** (pieces: %d)\n", countPieces(1));
+
+    // พิมพ์หมายเลขคอลัมน์ด้านบนสุด
     printf("        ");
-    for (col = 0; col < BOARD_SIZE; col++)
-      printf("+-----");
+    for (int col = 0; col < BOARD_SIZE; col++)
+        printf("  %d   ", col);
+    printf("\n");
+
+    // วนพิมพ์ทีละแถว
+    for (int row = 0; row < BOARD_SIZE; row++)
+    {
+        // พิมพ์เส้นแบ่างแนวนอนก่อนแต่ละแถว
+        printf("        ");
+        for (int col = 0; col < BOARD_SIZE; col++)
+            printf("+-----");
+        printf("+\n");
+
+        // พิมพ์เลขแถวด้านซ้าย แล้วพิมพ์หมากในแต่ละช่อง
+        printf("   %d    ", row);
+
+        for (int col = 0; col < BOARD_SIZE; col++)
+        {
+            if (board[row][col] == '.')
+            {
+                // ช่องว่าง ไม่มีหมาก
+                printf("|  .  ");
+            }
+            else
+            {
+                // ช่องมีหมาก — เช็คว่าหมากตัวนี้มีโล่ไหม
+                if (hasShield(row, col, owner[row][col]))
+                    printf("|[%c%d] ", board[row][col], owner[row][col]); // มีโล่ → แสดง [K1]
+                else
+                    printf("| %c%d  ", board[row][col], owner[row][col]); // ไม่มีโล่ → แสดง K1
+            }
+        }
+        printf("|\n");
+    }
+
+    // พิมพ์เส้นปิดด้านล่างสุด
+    printf("        ");
+    for (int col = 0; col < BOARD_SIZE; col++)
+        printf("+-----");
     printf("+\n");
 
-    // แถวหมาก — แสดงเลขแถวด้านซ้าย
-    printf("   %d    ", row);
-    for (col = 0; col < BOARD_SIZE; col++) {
-      if (game_board[row][col] == '.') {
-        printf("|  .  "); // ช่องว่าง
-      } else {
-        if (piece_has_shield(row, col, piece_owner[row][col]))
-          printf("|[%c%d] ", game_board[row][col], piece_owner[row][col]); // หมากมีโล่ เช่น [K1]
+    // แสดงจำนวนหมากของผู้เล่น 2 ด้านล่าง
+    printf("  *** PLAYER 2 *** (pieces: %d)\n", countPieces(2));
+
+    // แสดงสถานะโล่ของแต่ละผู้เล่น (ถ้ามีโล่อยู่)
+    for (int i = 1; i <= 2; i++)
+    {
+        if (shieldRow[i] != -1) // -1 หมายถึงไม่มีโล่
+        {
+            printf("  [Shield] Player %d: %c%d at (%d,%d) is shielded\n",
+                   i,
+                   board[shieldRow[i]][shieldCol[i]], // ชื่อหมากที่ถือโล่
+                   i,
+                   shieldRow[i],
+                   shieldCol[i]);
+        }
+    }
+}
+
+// ----------------------------
+
+// จัดการการปะทะเมื่อหมาก (attacker) พุ่งเข้าชนหมากข้าศึกที่ตำแหน่ง (toRow, toCol)
+// ใช้กฎเดียวกับการปะทะปกติ: K>Q>J>K, โล่ดูดซับได้, ชนิดเดียวกันตายทั้งคู่
+// fromRow/fromCol คือตำแหน่งที่ attacker อยู่ตอนนี้ (หลังถูกกับดักผลักมาแล้ว)
+void resolveCombat(int fromRow, int fromCol, int toRow, int toCol, int player)
+{
+    char attacker = board[fromRow][fromCol];  // หมากที่ถูกผลักมา
+    char defender = board[toRow][toCol];      // หมากข้าศึกที่อยู่ปลายทาง
+    int defenderPlayer = owner[toRow][toCol]; // เจ้าของหมากฝ่ายรับ
+
+    int attackerShield = hasShield(fromRow, fromCol, player);     // ผู้ถูกผลักมีโล่ไหม
+    int defenderShield = hasShield(toRow, toCol, defenderPlayer); // ฝ่ายรับมีโล่ไหม
+
+    printf("  >> Trap slams '%c' (Player %d) into '%c' (Player %d)!\n",
+           attacker, player, defender, defenderPlayer);
+
+    if (defenderShield)
+    {
+        // ฝ่ายรับมีโล่ → โล่ดูดซับ ผู้ถูกผลักตาย
+        printf("  *** Defender shielded! '%c' (Player %d) is destroyed! ***\n",
+               attacker, player);
+        removeShield(toRow, toCol);    // โล่ถูกใช้ไปแล้ว
+        board[fromRow][fromCol] = '.'; // หมากที่ถูกผลักตาย
+        owner[fromRow][fromCol] = 0;
+    }
+    else if (canCapture(attacker, defender))
+    {
+        // ผู้ถูกผลักกินฝ่ายรับได้ตามกฎ K>Q>J>K
+        printf("  >> '%c' (Player %d) captures '%c' (Player %d)!\n",
+               attacker, player, defender, defenderPlayer);
+        removeShield(toRow, toCol);     // เอาโล่ฝ่ายรับออก
+        board[toRow][toCol] = attacker; // หมากพุ่งเข้าแทนที่
+        owner[toRow][toCol] = player;
+        moveShield(fromRow, fromCol, toRow, toCol); // โล่ตามไปด้วย
+        board[fromRow][fromCol] = '.';
+        owner[fromRow][fromCol] = 0;
+    }
+    else if (canCapture(defender, attacker))
+    {
+        // ฝ่ายรับแข็งแกร่งกว่า → ผู้ถูกผลักตาย
+        if (attackerShield)
+        {
+            // แต่มีโล่ → รอดชีวิต โล่หมด
+            printf("  *** Shield saved '%c' (Player %d) from being captured! ***\n",
+                   attacker, player);
+            removeShield(fromRow, fromCol);
+        }
         else
-          printf("| %c%d  ", game_board[row][col], piece_owner[row][col]); // หมากปกติ เช่น K1
-      }
-    }
-    printf("|\n");
-  }
-
-  // เส้นปิดด้านล่าง
-  printf("        ");
-  for (col = 0; col < BOARD_SIZE; col++)
-    printf("+-----");
-  printf("+\n");
-
-  printf("  *** PLAYER 2 *** (pieces: %d)\n", count_remaining_pieces(2));
-
-  // แสดงสถานะโล่ถ้ามีอยู่
-  int player_num;
-  for (player_num = 1; player_num <= 2; player_num++) {
-    if (shield_row[player_num] != -1)
-      printf("  [Shield] Player %d: %c%d at (%d,%d) is shielded\n",
-             player_num,
-             game_board[shield_row[player_num]][shield_col[player_num]],
-             player_num, shield_row[player_num], shield_col[player_num]);
-  }
-}
-
-/* ------------------------------------------------------------
- *  SECTION 5 : ฟังก์ชันช่วย (Helper Functions)
- *  — ฟังก์ชันเล็กๆ ที่ถูกเรียกใช้ซ้ำหลายที่
- * ------------------------------------------------------------ */
-
-// นับหมากที่เหลืออยู่ของผู้เล่น
-int count_remaining_pieces(int target_player) {
-  int count = 0, row, col;
-  for (row = 0; row < BOARD_SIZE; row++)
-    for (col = 0; col < BOARD_SIZE; col++)
-      if (piece_owner[row][col] == target_player)
-        count++;
-  return count;
-}
-
-// เช็คว่าหมาก attacking_type กินหมาก defending_type ได้ไหม (K>Q, Q>J, J>K)
-int can_capture(char attacking_type, char defending_type) {
-  if (attacking_type == 'K' && defending_type == 'Q')
-    return 1;
-  if (attacking_type == 'Q' && defending_type == 'J')
-    return 1;
-  if (attacking_type == 'J' && defending_type == 'K')
-    return 1;
-  return 0;
-}
-
-// เช็คว่า (row, col) อยู่ในกระดานไหม
-int is_in_bounds(int row, int col) {
-  return row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE;
-}
-
-// เช็คว่าหมากที่ (row, col) ของผู้เล่น player มีโล่ปกป้องอยู่ไหม
-int piece_has_shield(int row, int col, int player) {
-  return (shield_row[player] == row && shield_col[player] == col);
-}
-
-// เอาโล่ออกจากตำแหน่ง (row, col) — ใช้ตอนโล่ถูกใช้ไปแล้ว
-void remove_shield(int row, int col) {
-  int player_index;
-  for (player_index = 1; player_index <= 2; player_index++)
-    if (shield_row[player_index] == row && shield_col[player_index] == col)
-      shield_row[player_index] = shield_col[player_index] = -1;
-}
-
-// อัปเดตตำแหน่งโล่เมื่อหมากย้ายจาก (from_row, from_col) ไป (to_row, to_col)
-void move_shield_with_piece(int from_row, int from_col, int to_row, int to_col) {
-  int player_index;
-  for (player_index = 1; player_index <= 2; player_index++)
-    if (shield_row[player_index] == from_row && shield_col[player_index] == from_col) {
-      shield_row[player_index] = to_row;
-      shield_col[player_index] = to_col;
-    }
-}
-
-// ค้นหาหมากชื่อ piece_name ของผู้เล่น player บนกระดาน
-// คืน 1 ถ้าเจอ และใส่ตำแหน่งกลับใน result_row, result_col
-// คืน 0 ถ้าหาไม่เจอ
-int search_piece(char piece_name, int player, int *result_row, int *result_col) {
-  int row, col;
-  for (row = 0; row < BOARD_SIZE; row++)
-    for (col = 0; col < BOARD_SIZE; col++)
-      if (piece_owner[row][col] == player && game_board[row][col] == piece_name) {
-        *result_row = row;
-        *result_col = col;
-        return 1;
-      }
-  return 0;
-}
-
-// ล้าง input buffer — ป้องกันตัวอักษรเก่าค้างอยู่ใน buffer
-void clear_input_buffer() {
-  int char_read;
-  while ((char_read = getchar()) != '\n' && char_read != EOF)
-    ;
-}
-
-/* ------------------------------------------------------------
- *  SECTION 6 : กับดัก (trigger_trap)
- *  — เรียกใช้เมื่อหมากเหยียบช่องที่มีกับดักซ่อนอยู่
- *  — ผลัก : ไปข้างหน้า 1 ช่อง → ถ้าไม่ได้ก็ถอยหลัง 1 ช่อง
- *  — กับดักหายไปหลังถูกเหยียบ
- * ------------------------------------------------------------ */
-
-void trigger_trap(int row, int col, int player, int trap_index) {
-  printf("\n");
-  printf("  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-  printf("  !!  TRAP triggered at (%d,%d)! !!\n", row, col);
-  printf("  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-
-  // Player 1 เดินลง (push_direction=+1), Player 2 เดินขึ้น (push_direction=-1)
-  int push_direction = (player == 1) ? 1 : -1;
-  int forward_row    = row + push_direction; // ช่องข้างหน้า
-  int backward_row   = row - push_direction; // ช่องข้างหลัง
-
-  if (is_in_bounds(forward_row, col) && game_board[forward_row][col] == '.') {
-    // ผลักไปข้างหน้าได้
-    printf("  >> Trap: pushed FORWARD -> (%d,%d)\n", forward_row, col);
-    game_board[forward_row][col]  = game_board[row][col];
-    piece_owner[forward_row][col] = piece_owner[row][col];
-    move_shield_with_piece(row, col, forward_row, col);
-    game_board[row][col]  = '.';
-    piece_owner[row][col] = 0;
-  } else if (is_in_bounds(backward_row, col) && game_board[backward_row][col] == '.') {
-    // ข้างหน้าไม่ว่าง → ผลักถอยหลังแทน
-    printf("  >> Trap: pushed BACKWARD -> (%d,%d)\n", backward_row, col);
-    game_board[backward_row][col]  = game_board[row][col];
-    piece_owner[backward_row][col] = piece_owner[row][col];
-    move_shield_with_piece(row, col, backward_row, col);
-    game_board[row][col]  = '.';
-    piece_owner[row][col] = 0;
-  } else {
-    // ทั้งสองทางมีคนอยู่ → อยู่เดิม
-    printf("  >> Trap: no room to move, piece stays.\n");
-  }
-
-  trap_active[trap_index] = 0; // กับดักหายไปแล้ว
-  printf("  >> Trap is now gone.\n");
-}
-
-/* ------------------------------------------------------------
- *  SECTION 7 : จัดการ 1 เทิร์น (play_turn)
- *  — ฟังก์ชันหลักของแต่ละรอบ ทำงานตามขั้นตอนนี้:
- *    1) แสดงกระดาน       → ผู้เล่นเห็นสถานะปัจจุบัน
- *    2) ถามใช้โล่ไหม     → ถ้าตอบ Yes ให้เลือกหมากที่จะสวมโล่
- *    3) เลือกหมากที่จะเดิน (J / K / Q)
- *    4) เลือกทิศทาง      (W=ขึ้น / S=ลง / A=ซ้าย / D=ขวา)
- *    5) ตรวจกติกา + เดิน
- *    6) ถ้าไปเจอกับดัก   → ทำการผลัก
- *    7) ถ้าไปชนหมาก      → ตัดสินผลการปะทะ
- *  — คืน 1 ถ้าเดินสำเร็จ, คืน 0 ถ้าเดินผิดพลาด (จะถามใหม่)
- * ------------------------------------------------------------ */
-
-int play_turn(int player) {
-  print_board();
-  printf("\n=== Player %d's Turn ===\n", player);
-
-  /* ---- ขั้นที่ 1 : ถามใช้โล่ไหม (ถ้ายังไม่เคยใช้) ---- */
-  if (!shield_used[player]) {
-    int want_shield = -1;
-    while (want_shield != 0 && want_shield != 1) {
-      printf("  [Feature 2] Use Shield this turn? (1=Yes / 0=No): ");
-      if (scanf("%d", &want_shield) != 1) {
-        clear_input_buffer();
-        want_shield = -1;
-        continue;
-      }
-      clear_input_buffer();
-      if (want_shield != 0 && want_shield != 1)
-        printf("  ! Please enter 1 or 0.\n");
-    }
-
-    if (want_shield == 1) {
-      // วนถามจนกว่าจะพิมชื่อหมากถูก หรือกด 0 เพื่อยกเลิก
-      while (1) {
-        printf("  Select piece to shield (J / K / Q) or '0' to cancel: ");
-        char shield_input[8];
-        if (scanf("%7s", shield_input) != 1) {
-          clear_input_buffer();
-          continue;
+        {
+            printf("  >> '%c' (Player %d) was destroyed by '%c' (Player %d)!\n",
+                   attacker, player, defender, defenderPlayer);
+            board[fromRow][fromCol] = '.';
+            owner[fromRow][fromCol] = 0;
         }
-        clear_input_buffer();
-
-        if (shield_input[0] == '0') {
-          printf("  Shield cancelled.\n");
-          break;
-        }
-
-        // แปลง lowercase -> uppercase เผื่อผู้เล่นพิมพ์ตัวเล็ก
-        char shield_piece = shield_input[0];
-        if (shield_piece >= 'a' && shield_piece <= 'z')
-          shield_piece = shield_piece - 32;
-
-        if (shield_piece != 'J' && shield_piece != 'K' && shield_piece != 'Q') {
-          printf("  ! Use J, K, or Q only.\n");
-          continue;
-        }
-
-        int shield_piece_row, shield_piece_col;
-        if (!search_piece(shield_piece, player, &shield_piece_row, &shield_piece_col)) {
-          printf("  ! You don't have '%c' on the board.\n", shield_piece);
-          continue;
-        }
-
-        // ใส่โล่ให้หมากตัวนั้น
-        shield_row[player]  = shield_piece_row;
-        shield_col[player]  = shield_piece_col;
-        shield_used[player] = 1;
-        printf("  >> Shield applied to '%c' at (%d,%d)\n",
-               game_board[shield_piece_row][shield_piece_col],
-               shield_piece_row, shield_piece_col);
-        print_board(); // refresh กระดานให้เห็น [ ] ทันทีก่อนเดิน
-        break;
-      }
     }
-  }
-
-  /* ---- ขั้นที่ 2 : เลือกหมากที่จะเดิน ---- */
-  printf("  Select piece to move (J / K / Q): ");
-  if (scanf("%7s", piece_input) != 1) {
-    clear_input_buffer();
-    printf("  ! Invalid input.\n");
-    return 0;
-  }
-  clear_input_buffer();
-
-  // แปลง lowercase -> uppercase
-  char move_piece = piece_input[0];
-  if (move_piece >= 'a' && move_piece <= 'z')
-    move_piece = move_piece - 32;
-
-  if (move_piece != 'J' && move_piece != 'K' && move_piece != 'Q') {
-    printf("  ! Use J, K, or Q only.\n");
-    return 0;
-  }
-
-  int from_row, from_col;
-  if (!search_piece(move_piece, player, &from_row, &from_col)) {
-    printf("  ! You don't have '%c' on the board.\n", move_piece);
-    return 0;
-  }
-
-  // แสดงหมากที่เลือก พร้อมบอกถ้ามีโล่อยู่
-  printf("  >> Selected '%c' at (%d,%d)%s\n",
-         game_board[from_row][from_col], from_row, from_col,
-         piece_has_shield(from_row, from_col, player) ? "  [** SHIELDED **]" : "");
-
-  /* ---- ขั้นที่ 3 : รับทิศทาง WASD ---- */
-  printf("  Direction (W=Up / S=Down / A=Left / D=Right): ");
-  if (scanf("%7s", direction_input) != 1) {
-    clear_input_buffer();
-    return 0;
-  }
-  clear_input_buffer();
-
-  char direction_key = direction_input[0];
-  if (direction_key >= 'a' && direction_key <= 'z')
-    direction_key = direction_key - 32;
-
-  // แปลงทิศทางเป็นค่า row_change, col_change สำหรับบวกกับตำแหน่ง
-  int row_change = 0, col_change = 0;
-  if (direction_key == 'W')
-    row_change = -1; // ขึ้น → แถวลดลง
-  else if (direction_key == 'S')
-    row_change = 1;  // ลง  → แถวเพิ่มขึ้น
-  else if (direction_key == 'A')
-    col_change = -1; // ซ้าย → คอลัมน์ลดลง
-  else if (direction_key == 'D')
-    col_change = 1;  // ขวา → คอลัมน์เพิ่มขึ้น
-  else {
-    printf("  ! Invalid key. Use W/A/S/D.\n");
-    return 0;
-  }
-
-  // คำนวณตำแหน่งปลายทาง
-  int to_row = from_row + row_change;
-  int to_col = from_col + col_change;
-
-  /* ---- ขั้นที่ 4 : ตรวจกติกาก่อนเดิน ---- */
-
-  // ห้ามออกนอกกระดาน
-  if (!is_in_bounds(to_row, to_col)) {
-    printf("  ! Out of bounds.\n");
-    return 0;
-  }
-
-  // ห้ามทับหมากตัวเอง
-  if (piece_owner[to_row][to_col] == player) {
-    printf("  ! Cannot move onto your own piece.\n");
-    return 0;
-  }
-
-  char attacking_piece = game_board[from_row][from_col]; // ตัวที่กำลังเดิน
-  char defending_piece = game_board[to_row][to_col];     // ตัวที่อยู่ที่ปลายทาง (ถ้ามี)
-
-  // เช็คว่าปลายทางมีกับดักซ่อนอยู่ไหม
-  int hit_trap_index = -1;
-  int trap_index;
-  for (trap_index = 0; trap_index < 2; trap_index++)
-    if (trap_active[trap_index] && to_row == trap_row[trap_index] && to_col == trap_col[trap_index])
-      hit_trap_index = trap_index;
-
-  /* ---- ขั้นที่ 5 : เดิน ---- */
-
-  if (defending_piece == '.' || hit_trap_index >= 0) {
-    // ช่องว่าง (หรือมีกับดักซ่อน) → ย้ายหมากไป
-    game_board[to_row][to_col]  = attacking_piece;
-    piece_owner[to_row][to_col] = player;
-    move_shield_with_piece(from_row, from_col, to_row, to_col); // โล่ติดตามหมากไปด้วย
-    game_board[from_row][from_col]  = '.';
-    piece_owner[from_row][from_col] = 0;
-
-    if (hit_trap_index >= 0)
-      trigger_trap(to_row, to_col, player, hit_trap_index); // โดนกับดัก!
     else
-      printf("  >> Moved '%c' to (%d,%d)\n", attacking_piece, to_row, to_col);
-
-  } else {
-    /* ---- ขั้นที่ 6 : ปะทะกัน ---- */
-    int defending_player   = piece_owner[to_row][to_col];
-    int defender_has_shield = piece_has_shield(to_row, to_col, defending_player); // ฝ่ายตั้งรับมีโล่ไหม
-    int attacker_has_shield = piece_has_shield(from_row, from_col, player);       // ฝ่ายโจมตีมีโล่ไหม
-
-    if (defender_has_shield && defending_player != player) {
-      // ---- กรณี: ฝ่ายตั้งรับมีโล่ → โล่ดูดซับการโจมตี ผู้โจมตีตาย ----
-      printf("  *** Player %d's '%c' at (%d,%d) is SHIELDED! "
-             "Shield absorbs the attack — your '%c' is destroyed! ***\n",
-             defending_player, defending_piece, to_row, to_col, attacking_piece);
-      remove_shield(to_row, to_col); // โล่ถูกใช้หมดแล้ว
-      game_board[from_row][from_col]  = '.';
-      piece_owner[from_row][from_col] = 0;
-      printf("  (Shield used up. '%c' (Player %d) remains at (%d,%d).)\n",
-             defending_piece, defending_player, to_row, to_col);
-
-    } else if (can_capture(attacking_piece, defending_piece)) {
-      // ---- กรณี: ผู้โจมตีกินฝ่ายตั้งรับได้ ----
-      printf("  >> '%c' captures '%c' from Player %d!\n",
-             attacking_piece, defending_piece, defending_player);
-      remove_shield(to_row, to_col);
-      game_board[to_row][to_col]  = attacking_piece;
-      piece_owner[to_row][to_col] = player;
-      move_shield_with_piece(from_row, from_col, to_row, to_col);
-      game_board[from_row][from_col]  = '.';
-      piece_owner[from_row][from_col] = 0;
-
-    } else if (can_capture(defending_piece, attacking_piece)) {
-      // ---- กรณี: ฝ่ายตั้งรับกินผู้โจมตีได้ ----
-      if (attacker_has_shield) {
-        // แต่ผู้โจมตีมีโล่ → รอดชีวิต โล่หมด
-        printf("  *** Your '%c' had a SHIELD and survived! Shield used up. ***\n",
-               attacking_piece);
-        remove_shield(from_row, from_col);
-      } else {
-        // ไม่มีโล่ → ตายตามปกติ
-        printf("  >> Your '%c' was captured by '%c' from Player %d!\n",
-               attacking_piece, defending_piece, defending_player);
-        game_board[from_row][from_col]  = '.';
-        piece_owner[from_row][from_col] = 0;
-      }
-
-    } else {
-      // ---- กรณี: หมากชนิดเดียวกันชนกัน ----
-      if (attacker_has_shield && !defender_has_shield) {
-        // ผู้โจมตีมีโล่ → รอด ฝ่ายตรงข้ามตาย
-        printf("  >> Same type! '%c' (Player %d) had a shield and SURVIVED! "
-               "'%c' (Player %d) is removed!\n",
-               attacking_piece, player, defending_piece, defending_player);
-        remove_shield(from_row, from_col);
-        game_board[to_row][to_col]      = attacking_piece;
-        piece_owner[to_row][to_col]     = player;
-        game_board[from_row][from_col]  = '.';
-        piece_owner[from_row][from_col] = 0;
-
-      } else if (defender_has_shield && !attacker_has_shield) {
-        // ฝ่ายตั้งรับมีโล่ → รอด ผู้โจมตีตาย
-        printf("  >> Same type! '%c' (Player %d) had a shield and SURVIVED! "
-               "'%c' (Player %d) is removed!\n",
-               defending_piece, defending_player, attacking_piece, player);
-        remove_shield(to_row, to_col);
-        game_board[from_row][from_col]  = '.';
-        piece_owner[from_row][from_col] = 0;
-
-      } else if (!attacker_has_shield && !defender_has_shield) {
-        // ไม่มีโล่เลย → ตายทั้งคู่
-        printf("  >> '%c' vs '%c' - same type! Both removed!\n",
-               attacking_piece, defending_piece);
-        game_board[from_row][from_col]  = '.';
-        piece_owner[from_row][from_col] = 0;
-        game_board[to_row][to_col]      = '.';
-        piece_owner[to_row][to_col]     = 0;
-
-      } else {
-        // มีโล่ทั้งคู่ → รอดทั้งคู่ โล่ทั้งสองหมด
-        printf("  >> Same type! Both had shields - BOTH SURVIVED! Shields used up.\n");
-        remove_shield(from_row, from_col);
-        remove_shield(to_row, to_col);
-      }
+    {
+        // หมากชนิดเดียวกันชนกัน
+        if (attackerShield && !defenderShield)
+        {
+            // ผู้ถูกผลักมีโล่ ฝ่ายรับไม่มี → ผู้ถูกผลักรอด ฝ่ายรับตาย
+            printf("  >> Same type! '%c' (Player %d) had a shield and SURVIVED!\n",
+                   attacker, player);
+            removeShield(fromRow, fromCol);
+            board[toRow][toCol] = attacker;
+            owner[toRow][toCol] = player;
+            board[fromRow][fromCol] = '.';
+            owner[fromRow][fromCol] = 0;
+        }
+        else if (defenderShield && !attackerShield)
+        {
+            // ฝ่ายรับมีโล่ ผู้ถูกผลักไม่มี → ฝ่ายรับรอด ผู้ถูกผลักตาย
+            printf("  >> Same type! '%c' (Player %d) had a shield and SURVIVED!\n",
+                   defender, defenderPlayer);
+            removeShield(toRow, toCol);
+            board[fromRow][fromCol] = '.';
+            owner[fromRow][fromCol] = 0;
+        }
+        else if (!attackerShield && !defenderShield)
+        {
+            // ไม่มีโล่ทั้งคู่ → ตายทั้งคู่
+            printf("  >> Same type clash! Both '%c' removed!\n", attacker);
+            board[fromRow][fromCol] = '.';
+            owner[fromRow][fromCol] = 0;
+            board[toRow][toCol] = '.';
+            owner[toRow][toCol] = 0;
+        }
+        else
+        {
+            // มีโล่ทั้งคู่ → รอดทั้งคู่ โล่หมดทั้งสอง
+            printf("  >> Same type! Both had shields - BOTH SURVIVED! Shields used up.\n");
+            removeShield(fromRow, fromCol);
+            removeShield(toRow, toCol);
+        }
     }
-  }
-
-  return 1; // เดินสำเร็จ
 }
 
-/* ------------------------------------------------------------
- *  SECTION 8 : เช็คผู้ชนะ (get_game_result)
- *  — นับหมากที่เหลือของแต่ละฝั่ง
- *  — คืน 0 = ยังเล่นอยู่, 1 = P1 ชนะ, 2 = P2 ชนะ, 3 = เสมอ
- * ------------------------------------------------------------ */
+// ----------------------------
 
-int get_game_result() {
-  int player1_count = count_remaining_pieces(1);
-  int player2_count = count_remaining_pieces(2);
+// จัดการเมื่อหมากเหยียบกับดัก
+// ผลคือหมากจะถูกผลักไปข้างหน้า 1 ช่อง ถ้าข้างหน้าไม่ว่างก็ถอยหลัง 1 ช่อง
+// ถ้าช่องที่ผลักไปมีหมากข้าศึก → เกิดการปะทะตามกติกาทันที
+// กับดักจะหายไปจากกระดานหลังถูกเหยียบ ไม่ว่าจะเกิดอะไรขึ้น
+void triggerTrap(int row, int col, int player, int index)
+{
+    printf("\n");
+    printf("  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+    printf("  !!  TRAP triggered at (%d,%d)! !!\n", row, col);
+    printf("  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
 
-  if (player1_count == 0 && player2_count == 0)
-    return 3; // หมดพร้อมกัน → เสมอ
-  if (player1_count == 0)
-    return 2; // Player 1 หมดหมาก → Player 2 ชนะ
-  if (player2_count == 0)
-    return 1; // Player 2 หมดหมาก → Player 1 ชนะ
-  return 0;   // ยังมีหมากทั้งสองฝ่าย → เล่นต่อ
-}
+    // ทิศทางผลักขึ้นอยู่กับว่าเป็นผู้เล่นคนไหน
+    // ผู้เล่น 1 เดินลง → ถูกผลักลงต่อไป (+1)
+    // ผู้เล่น 2 เดินขึ้น → ถูกผลักขึ้นต่อไป (-1)
+    int direction = (player == 1) ? 1 : -1;
 
-/* ------------------------------------------------------------
- *  SECTION 9 : main — จุดเริ่มต้นของโปรแกรม
- *  — แสดง Title → เริ่มเกม → วนเทิร์น → เช็คผล → สลับผู้เล่น
- * ------------------------------------------------------------ */
+    int forwardRow = row + direction;  // ช่องข้างหน้า (ทิศทางที่หมากกำลังเดิน)
+    int backwardRow = row - direction; // ช่องข้างหลัง (ทิศทางตรงข้าม)
 
-int main() {
-  printf("============================================\n");
-  printf("          JKQ Board Game\n");
-  printf("       Mak Ruk Yuttha Hatthi\n");
-  printf("============================================\n");
+    // ช่องที่ผลักได้คือ: ว่างอยู่ หรือ มีหมากข้าศึก (ห้ามทับหมากตัวเอง)
+    int canPushForward = inBoard(forwardRow, col) && (board[forwardRow][col] == '.' || owner[forwardRow][col] != player);
+    int canPushBackward = inBoard(backwardRow, col) && (board[backwardRow][col] == '.' || owner[backwardRow][col] != player);
 
-  setup_board(); // เตรียมกระดานก่อนเริ่ม
+    if (canPushForward)
+    {
+        printf("  >> Trap: pushed FORWARD -> (%d,%d)\n", forwardRow, col);
 
-  while (1) {
-    // วนถามซ้ำถ้าผู้เล่นเดินผิดกติกา (return 0)
-    while (!play_turn(current_player))
-      ;
-
-    // หลังเดินแล้วเช็คว่าเกมจบหรือยัง
-    int game_result = get_game_result();
-
-    if (game_result == 1) {
-      print_board();
-      printf("=========================================================\n");
-      printf("\n*** Player 1 WINS! All opponent pieces eliminated! ***\n");
-      printf("\n=========================================================\n");
-      break;
-    } else if (game_result == 2) {
-      print_board();
-      printf("=========================================================\n");
-      printf("\n*** Player 2 WINS! All opponent pieces eliminated! ***\n");
-      printf("\n=========================================================\n");
-      break;
-    } else if (game_result == 3) {
-      print_board();
-      printf("=========================================================\n");
-      printf("\n*** DRAW! Both players lost all pieces simultaneously! ***\n");
-      printf("\n=========================================================\n");
-      break;
+        if (board[forwardRow][col] != '.')
+        {
+            // ช่องข้างหน้ามีหมากข้าศึก → ย้ายหมากไปก่อน แล้วปะทะ
+            char savedPiece = board[row][col];
+            int savedOwner = owner[row][col];
+            board[row][col] = '.';
+            owner[row][col] = 0;
+            moveShield(row, col, forwardRow, col);
+            resolveCombat(savedPiece, savedOwner, forwardRow, col, player);
+        }
+        else
+        {
+            // ช่องข้างหน้าว่าง → ย้ายหมากไปปกติ
+            board[forwardRow][col] = board[row][col];
+            owner[forwardRow][col] = owner[row][col];
+            moveShield(row, col, forwardRow, col);
+            board[row][col] = '.';
+            owner[row][col] = 0;
+        }
     }
+    else if (canPushBackward)
+    {
+        printf("  >> Trap: pushed BACKWARD -> (%d,%d)\n", backwardRow, col);
 
-    // สลับเทิร์น
-    if (current_player == 1)
-      current_player = 2;
+        if (board[backwardRow][col] != '.')
+        {
+            // ช่องข้างหลังมีหมากข้าศึก → ย้ายหมากไปก่อน แล้วปะทะ
+            char savedPiece = board[row][col];
+            int savedOwner = owner[row][col];
+            board[row][col] = '.';
+            owner[row][col] = 0;
+            moveShield(row, col, backwardRow, col);
+            resolveCombat(savedPiece, savedOwner, backwardRow, col, player);
+        }
+        else
+        {
+            // ช่องข้างหลังว่าง → ย้ายหมากไปปกติ
+            board[backwardRow][col] = board[row][col];
+            owner[backwardRow][col] = owner[row][col];
+            moveShield(row, col, backwardRow, col);
+            board[row][col] = '.';
+            owner[row][col] = 0;
+        }
+    }
     else
-      current_player = 1;
-  }
+    {
+        // ทั้งข้างหน้าและข้างหลังถูกปิดกั้นด้วยหมากตัวเอง → ขยับไม่ได้
+        printf("  >> Trap: no room to move, piece stays.\n");
+    }
 
-  printf("============================================\n");
-  printf("\n          Thanks for playing!\n");
-  printf("\n============================================\n");
-  return 0;
+    // กับดักถูกเหยียบแล้ว → หายไปจากกระดานทันที
+    trapActive[index] = 0;
+    printf("  >> Trap is now gone.\n");
+}
+
+// ----------------------------
+
+// จัดการ 1 เทิร์นของผู้เล่น
+// ขั้นตอน: แสดงกระดาน → ถามใช้โล่ → เลือกหมาก → เลือกทิศทาง → ตรวจกติกา → เดิน
+// คืนค่า 1 ถ้าเดินสำเร็จ, คืนค่า 0 ถ้าเดินผิดพลาด (จะถูกวนให้เดินใหม่)
+int playTurn(int player)
+{
+    printBoard(); // แสดงกระดานให้ผู้เล่นดูก่อน
+    printf("\n=== Player %d's Turn ===\n", player);
+
+    // ===== ถามใช้โล่ไหม (ถ้ายังไม่เคยใช้เลย) =====
+    if (!shieldUsed[player])
+    {
+        int use = -1; // -1 คือยังไม่ได้ตอบ
+
+        // วนถามซ้ำจนกว่าจะได้คำตอบที่ถูกต้อง (0 หรือ 1 เท่านั้น)
+        while (use != 0 && use != 1)
+        {
+            printf("  [Feature 2] Use Shield this turn? (1=Yes / 0=No): ");
+
+            if (scanf("%d", &use) != 1)
+            {
+                // scanf ล้มเหลว = ผู้เล่นพิมพ์ตัวอักษรแทนตัวเลข
+                use = -1; // reset ค่าให้วนถามใหม่
+            }
+            clearInputBuffer(); // ล้าง buffer ทุกกรณี ป้องกันค่าค้าง
+
+            if (use != 0 && use != 1)
+            {
+                // ได้ตัวเลขแต่ไม่ใช่ 0 หรือ 1 เช่น พิมพ์ "5" หรือ "99"
+                printf("  ! Please enter 1 or 0 only.\n");
+            }
+        }
+
+        if (use == 1)
+        {
+            // ผู้เล่นเลือกจะใช้โล่ → ให้เลือกว่าจะสวมโล่ให้หมากตัวไหน
+            while (1)
+            {
+                printf("  Select piece to shield (J / K / Q) or '0' to cancel: ");
+                scanf("%s", pieceInput);
+
+                // ถ้าพิมพ์ '0' คือยกเลิก ออกจาก loop นี้เลย
+                if (pieceInput[0] == '0')
+                    break;
+
+                char piece = pieceInput[0];
+                // แปลงตัวพิมพ์เล็กเป็นตัวพิมพ์ใหญ่ เผื่อผู้เล่นพิมพ์ "j", "k", "q"
+                if (piece >= 'a' && piece <= 'z')
+                    piece -= 32; // ลบ 32 = แปลงเป็น uppercase ใน ASCII
+
+                int row, col;
+
+                // หาหมากที่เลือกบนกระดาน ถ้าหาไม่เจอให้ถามใหม่
+                if (!findPiece(piece, player, &row, &col))
+                {
+                    printf("  ! You don't have '%c'\n", piece);
+                    continue;
+                }
+
+                // บันทึกว่าหมากตัวนี้ได้รับโล่แล้ว
+                shieldRow[player] = row;
+                shieldCol[player] = col;
+                shieldUsed[player] = 1; // ทำเครื่องหมายว่าใช้โล่ไปแล้ว (ใช้ได้แค่ครั้งเดียว)
+
+                printf("  >> Shield applied to '%c' at (%d,%d)\n",
+                       board[row][col], row, col);
+
+                printBoard(); // refresh กระดานให้เห็น [K1] ก่อนเดิน
+                break;
+            }
+        }
+    }
+
+    // ===== เลือกหมากที่จะเดิน =====
+    printf("  Select piece to move (J / K / Q): ");
+    scanf("%s", pieceInput);
+
+    char piece = pieceInput[0];
+    // แปลงตัวพิมพ์เล็กเป็นใหญ่อีกครั้ง
+    if (piece >= 'a' && piece <= 'z')
+        piece -= 32;
+
+    int row, col;
+
+    // ตรวจว่ามีหมากชนิดนั้นบนกระดานไหม
+    if (!findPiece(piece, player, &row, &col))
+    {
+        printf("  ! You don't have '%c'\n", piece);
+        return 0; // เดินผิดพลาด → คืนค่า 0 เพื่อวนให้เดินใหม่
+    }
+
+    // แสดงหมากที่เลือก ถ้ามีโล่จะแสดง [** SHIELDED **] ด้วย
+    printf("  >> Selected '%c' at (%d,%d)%s\n",
+           board[row][col], row, col,
+           hasShield(row, col, player) ? "  [** SHIELDED **]" : "");
+
+    // ===== เลือกทิศทาง WASD =====
+    printf("  Direction (W=Up / S=Down / A=Left / D=Right): ");
+    scanf("%s", dirInput);
+
+    char direction = dirInput[0];
+    // แปลงตัวพิมพ์เล็กเป็นใหญ่
+    if (direction >= 'a' && direction <= 'z')
+        direction -= 32;
+
+    // แปลงปุ่มที่กดเป็นค่าเปลี่ยนแถว (dRow) และคอลัมน์ (dCol)
+    int dRow = 0, dCol = 0;
+
+    if (direction == 'W')
+        dRow = -1; // ขึ้นบน = แถวลดลง
+    else if (direction == 'S')
+        dRow = 1; // ลงล่าง = แถวเพิ่มขึ้น
+    else if (direction == 'A')
+        dCol = -1; // ซ้าย = คอลัมน์ลดลง
+    else if (direction == 'D')
+        dCol = 1; // ขวา = คอลัมน์เพิ่มขึ้น
+    else
+    {
+        printf("  ! Invalid key.\n");
+        return 0; // กดปุ่มผิด → เดินใหม่
+    }
+
+    // คำนวณตำแหน่งปลายทางที่หมากจะเดินไป
+    int newRow = row + dRow;
+    int newCol = col + dCol;
+
+    // ตรวจว่าปลายทางอยู่ในกระดานไหม
+    if (!inBoard(newRow, newCol))
+    {
+        printf("  ! Out of bounds.\n");
+        return 0;
+    }
+
+    // ตรวจว่าปลายทางไม่ใช่หมากของตัวเอง (ห้ามเดินทับหมากตัวเอง)
+    if (owner[newRow][newCol] == player)
+    {
+        printf("  ! Cannot move onto your own piece.\n");
+        return 0;
+    }
+
+    // เช็คว่าปลายทางมีกับดักซ่อนอยู่ไหม
+    int hitTrap = -1; // -1 = ไม่เจอกับดัก
+    for (int i = 0; i < 2; i++)
+    {
+        if (trapActive[i] && trapRow[i] == newRow && trapCol[i] == newCol)
+            hitTrap = i; // บันทึกว่าเจอกับดักอันไหน
+    }
+
+    char defender = board[newRow][newCol]; // หมากที่อยู่ที่ปลายทาง (ถ้ามี)
+
+    // ===== เดินหมาก =====
+    if (defender == '.' || hitTrap != -1)
+    {
+        // กรณีที่ 1: ช่องปลายทางว่าง (หรือมีกับดักซ่อน) → ย้ายหมากไปเลย
+        board[newRow][newCol] = board[row][col]; // วางหมากที่ช่องใหม่
+        owner[newRow][newCol] = player;
+        moveShield(row, col, newRow, newCol); // โล่ตามหมากไปด้วย
+
+        board[row][col] = '.'; // ช่องเดิมกลายเป็นว่าง
+        owner[row][col] = 0;
+
+        if (hitTrap != -1)
+            triggerTrap(newRow, newCol, player, hitTrap); // โดนกับดัก! ให้จัดการต่อ
+        else
+            printf("  >> Moved '%c' to (%d,%d)\n", piece, newRow, newCol);
+    }
+    else
+    {
+        // กรณีที่ 2: ช่องปลายทางมีหมากข้าศึก → เกิดการปะทะ
+        int defenderPlayer = owner[newRow][newCol];                     // ผู้เล่นที่เป็นเจ้าของหมากฝ่ายรับ
+        int defenderShield = hasShield(newRow, newCol, defenderPlayer); // ฝ่ายรับมีโล่ไหม
+        int attackerShield = hasShield(row, col, player);               // ฝ่ายโจมตีมีโล่ไหม
+
+        if (defenderShield)
+        {
+            // ---- ฝ่ายรับมีโล่ → โล่ดูดซับการโจมตี ผู้โจมตีตาย ----
+            printf("  *** Defender shielded! Your piece is destroyed! ***\n");
+            removeShield(newRow, newCol); // โล่ถูกใช้ไปแล้ว เอาออก
+            board[row][col] = '.';        // หมากโจมตีถูกทำลาย
+            owner[row][col] = 0;
+        }
+        else if (canCapture(piece, defender))
+        {
+            // ---- ผู้โจมตีกินฝ่ายรับได้ตามกฎ K>Q>J>K ----
+            printf("  >> '%c' captures '%c'!\n", piece, defender);
+
+            removeShield(newRow, newCol); // เอาโล่ฝ่ายรับออก (ถ้ามี)
+
+            board[newRow][newCol] = piece; // หมากโจมตีเข้ามาแทนที่
+            owner[newRow][newCol] = player;
+            moveShield(row, col, newRow, newCol); // โล่ผู้โจมตีตามไปด้วย
+
+            board[row][col] = '.'; // ช่องเดิมกลายเป็นว่าง
+            owner[row][col] = 0;
+        }
+        else if (canCapture(defender, piece))
+        {
+            // ---- ฝ่ายรับกินผู้โจมตีได้ตามกฎ ----
+            if (attackerShield)
+            {
+                // แต่ผู้โจมตีมีโล่อยู่ → โล่ดูดซับ ผู้โจมตีรอดชีวิต โล่หมด
+                printf("  *** Shield saved your piece! ***\n");
+                removeShield(row, col); // โล่ถูกใช้ไปแล้ว
+            }
+            else
+            {
+                // ไม่มีโล่ → หมากโจมตีถูกกินตามปกติ
+                printf("  >> Your '%c' was captured!\n", piece);
+                board[row][col] = '.';
+                owner[row][col] = 0;
+            }
+        }
+        else
+        {
+            // ---- หมากชนิดเดียวกันชนกัน ----
+            if (attackerShield && !defenderShield)
+            {
+                // ผู้โจมตีมีโล่ ฝ่ายรับไม่มี → ผู้โจมตีรอด ฝ่ายรับตาย โล่หมด
+                removeShield(row, col);
+                board[newRow][newCol] = piece;
+                owner[newRow][newCol] = player;
+                board[row][col] = '.';
+                owner[row][col] = 0;
+            }
+            else if (defenderShield && !attackerShield)
+            {
+                // ฝ่ายรับมีโล่ ผู้โจมตีไม่มี → ฝ่ายรับรอด ผู้โจมตีตาย โล่หมด
+                removeShield(newRow, newCol);
+                board[row][col] = '.';
+                owner[row][col] = 0;
+            }
+            else if (!attackerShield && !defenderShield)
+            {
+                // ไม่มีโล่ทั้งคู่ → ตายทั้งคู่ หายไปจากกระดานเลย
+                board[row][col] = '.';
+                owner[row][col] = 0;
+                board[newRow][newCol] = '.';
+                owner[newRow][newCol] = 0;
+            }
+            else
+            {
+                // มีโล่ทั้งคู่ → รอดทั้งคู่ โล่ทั้งสองหมดพร้อมกัน
+                removeShield(row, col);
+                removeShield(newRow, newCol);
+            }
+        }
+    }
+
+    return 1; // เดินสำเร็จ
+}
+
+// ----------------------------
+
+// เช็คสถานะเกมว่าจบหรือยัง
+// คืนค่า 0 = ยังเล่นอยู่, 1 = ผู้เล่น 1 ชนะ, 2 = ผู้เล่น 2 ชนะ, 3 = เสมอ
+int checkGame()
+{
+    int p1 = countPieces(1); // หมากที่เหลือของผู้เล่น 1
+    int p2 = countPieces(2); // หมากที่เหลือของผู้เล่น 2
+
+    if (p1 == 0 && p2 == 0)
+        return 3; // ทั้งสองหมดหมากพร้อมกัน → เสมอ
+    if (p1 == 0)
+        return 2; // ผู้เล่น 1 หมดหมาก → ผู้เล่น 2 ชนะ
+    if (p2 == 0)
+        return 1; // ผู้เล่น 2 หมดหมาก → ผู้เล่น 1 ชนะ
+
+    return 0; // ยังมีหมากทั้งสองฝ่าย → เล่นต่อ
+}
+
+// ----------------------------
+
+// จุดเริ่มต้นของโปรแกรม
+// ลำดับ: แสดง title → เตรียมกระดาน → วนรับเทิร์น → เช็คผล → สลับผู้เล่น
+int main()
+{
+    printf("============================================\n");
+    printf("          JKQ Board Game\n");
+    printf("       Mak Ruk Yuttha Hatthi\n");
+    printf("============================================\n");
+
+    setupBoard(); // เตรียมกระดานก่อนเริ่มเกม
+
+    while (1) // วนเกมไปเรื่อยๆ จนกว่าจะมีผู้ชนะหรือเสมอ
+    {
+        // ถ้า playTurn คืนค่า 0 (เดินผิดพลาด) ให้วนถามใหม่จนกว่าจะเดินได้
+        while (!playTurn(currentPlayer))
+            ;
+
+        // หลังเดินเสร็จ ตรวจสอบว่าเกมจบหรือยัง
+        int result = checkGame();
+
+        if (result == 1)
+        {
+            printBoard();
+            printf("============================================\n");
+            printf("         *** Player 1 WINS! ***\n");
+            printf("============================================\n");
+            break; // ออกจาก loop หลัก เกมจบ
+        }
+        else if (result == 2)
+        {
+            printBoard();
+            printf("============================================\n");
+            printf("        *** Player 2 WINS! ***\n");
+            printf("============================================\n");
+            break;
+        }
+        else if (result == 3)
+        {
+            printBoard();
+            printf("============================================\n");
+            printf("            *** DRAW! ***\n");
+            printf("============================================\n");
+            break;
+        }
+
+        // เกมยังไม่จบ → สลับเทิร์นให้ผู้เล่นอีกคน
+        currentPlayer = (currentPlayer == 1) ? 2 : 1;
+    }
+
+    return 0;
 }
